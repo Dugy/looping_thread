@@ -30,4 +30,4 @@ std::cout << "(main) Waited for 5s" << std::endl;
 
 ## Troubleshooting
 
-Error message `undefined reference to `pthread_create'` means that you need to add `-lpthread` to the compiler options.
+Error message `undefined reference to 'pthread_create'` means that you need to add `-lpthread` to the compiler options.

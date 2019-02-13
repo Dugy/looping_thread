@@ -15,22 +15,25 @@
 class LoopingThread {
 	std::chrono::system_clock::duration period_;
 	std::function<void()> routine_;
-	std::timed_mutex pauseMutex_;
-	std::unique_lock<std::timed_mutex> pauseLock_;
+	std::timed_mutex waitMutex_;
+	std::unique_lock<std::timed_mutex> waitLock_;
+	std::mutex pauseMutex_;
 	std::mutex resumeMutex_;
 	std::unique_lock<std::mutex> resumeLock_;
-	std::thread worker_;
 	bool exiting_ = false;
 	bool paused_;
 	bool resetTimeOnPause_ = true;
- 
-	inline void work() {
+	std::thread worker_;
+	
+	inline void work()
+	{
 		bool interrupted = false;
 		std::chrono::system_clock::time_point awakenAt = std::chrono::system_clock::now();
-		while(true) {
+		std::unique_lock<std::mutex> pauseLock(pauseMutex_);
+		while (true) {
 			bool interrupted = false;
 			{
-				std::unique_lock<std::timed_mutex> lock(pauseMutex_, std::try_to_lock);
+				std::unique_lock<std::timed_mutex> lock(waitMutex_, std::try_to_lock);
 				if (lock.owns_lock())
 					interrupted = true;
 				else {
@@ -42,11 +45,13 @@ class LoopingThread {
 					resetTimeOnPause_ = false;
 				}
 			}
- 
+			
 			if (interrupted) {
 				if (exiting_) break;
 				paused_ = true;
+				pauseLock.unlock();
 				std::unique_lock<std::mutex> lock(resumeMutex_);
+				pauseLock.lock();
 				paused_ = false;
 			} else {
 				routine_();
@@ -54,72 +59,78 @@ class LoopingThread {
 			}
 		}
 	}
-	public:
- 
+public:
+
 	/*!
 	* \brief Default contructor, nothing is done if created this way
 	*/
- 
-	inline LoopingThread() : routine_(nullptr) {
- 
+	
+	inline LoopingThread() : routine_(nullptr)
+	{
+	
 	}
- 
+	
 	/*!
 	* \brief Constructs the thread and starts running the routine periodically
 	* \param The calling period
 	* \param The function that is called periodically
 	* \param If the thread starts running or is paused until resume() is called
 	*/
-	inline LoopingThread(std::chrono::system_clock::duration period, std::function<void()> routine, bool run = true):
+	inline LoopingThread(std::chrono::system_clock::duration period, std::function<void()> routine, bool run = true) :
 		period_(period),
 		routine_(routine),
-		pauseLock_(pauseMutex_, std::defer_lock),
+		waitLock_(waitMutex_, std::defer_lock),
 		resumeLock_(resumeMutex_),
-		worker_(&LoopingThread::work, this),
 		paused_(true),
-		resetTimeOnPause_(true)
+		resetTimeOnPause_(false),
+		worker_(&LoopingThread::work, this)
 	{
 		if (run)
 			resume();
 	}
- 
+	
 	/*!
 	* \brief The destructor, interrupts the wait for another routine call, but waits for the routine to end if it's running
 	*/
-	inline ~LoopingThread() {
+	inline ~LoopingThread()
+	{
 		if (routine_) {
 			exiting_ = true;
-			pauseLock_.unlock();
+			waitLock_.unlock();
 			worker_.join();
 		}
 	}
- 
+	
 	/*!
 	* \brief Pause the execution, will wait until the end of routine
 	*/
-	inline void pause(bool resetTime = true) {
+	inline void pause(bool resetTime = true)
+	{
 		if (routine_) {
+			waitLock_.unlock();
 			resumeLock_.lock();
-			pauseLock_.unlock();
+			std::unique_lock<std::mutex> pauseLock(pauseMutex_);
 			resetTimeOnPause_ = resetTime;
 		}
 	}
- 
+	
 	/*!
 	* \brief Resume paused execution
 	*/
-	inline void resume() {
-		if (routine_ && paused_) {
-			pauseLock_.lock();
+	inline void resume()
+	{
+		if (routine_) {
+			waitLock_.lock();
 			resumeLock_.unlock();
 		}
 	}
- 
+	
 	/*!
 	* \brief Changes the period
 	* \param The new calling period
 	*/
-	inline void setPeriod(std::chrono::system_clock::duration newPeriod) {
+	inline void setPeriod(std::chrono::system_clock::duration newPeriod)
+	{
 		period_ = newPeriod;
 	}
 };

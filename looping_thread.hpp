@@ -48,11 +48,9 @@ class LoopingThread {
 			
 			if (interrupted) {
 				if (exiting_) break;
-				paused_ = true;
 				pauseLock.unlock();
 				std::unique_lock<std::mutex> lock(resumeMutex_);
 				pauseLock.lock();
-				paused_ = false;
 			} else {
 				routine_();
 				awakenAt += period_;
@@ -96,7 +94,10 @@ public:
 	{
 		if (routine_) {
 			exiting_ = true;
-			waitLock_.unlock();
+			if (paused_)
+				resumeLock_.unlock();
+			else
+				waitLock_.unlock();
 			worker_.join();
 		}
 	}
@@ -107,6 +108,7 @@ public:
 	inline void pause(bool resetTime = true)
 	{
 		if (routine_) {
+			paused_ = true;
 			waitLock_.unlock();
 			resumeLock_.lock();
 			std::unique_lock<std::mutex> pauseLock(pauseMutex_);
@@ -120,6 +122,7 @@ public:
 	inline void resume()
 	{
 		if (routine_) {
+			paused_ = false;
 			waitLock_.lock();
 			resumeLock_.unlock();
 		}

@@ -7,6 +7,9 @@
 * \note The waiting is implemented using std::timed_mutex
 */
 
+#ifndef LOOPING_THREAD_H
+#define LOOPING_THREAD_H
+
 #include <thread>
 #include <functional>
 #include <mutex>
@@ -137,3 +140,4 @@ public:
 		period_ = newPeriod;
 	}
 };
+#endif // LOOPING_THREAD_H

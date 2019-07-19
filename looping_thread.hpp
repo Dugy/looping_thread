@@ -16,7 +16,7 @@
 #include <chrono>
  
 class LoopingThread {
-	std::chrono::system_clock::duration period_;
+	std::chrono::steady_clock::duration period_;
 	std::function<void()> routine_;
 	std::timed_mutex waitMutex_;
 	std::unique_lock<std::timed_mutex> waitLock_;
@@ -31,7 +31,7 @@ class LoopingThread {
 	inline void work()
 	{
 		bool interrupted = false;
-		std::chrono::system_clock::time_point awakenAt = std::chrono::system_clock::now();
+		std::chrono::steady_clock::time_point awakenAt = std::chrono::steady_clock::now();
 		std::unique_lock<std::mutex> pauseLock(pauseMutex_);
 		while (true) {
 			bool interrupted = false;
@@ -40,11 +40,11 @@ class LoopingThread {
 				if (lock.owns_lock())
 					interrupted = true;
 				else {
-					if (awakenAt >= std::chrono::system_clock::now() && lock.try_lock_until(awakenAt))
+					if (awakenAt >= std::chrono::steady_clock::now() && lock.try_lock_until(awakenAt))
 						interrupted = true;
 				}
 				if (resetTimeOnPause_) {
-					awakenAt + period_ = std::chrono::system_clock::now();
+					awakenAt + period_ = std::chrono::steady_clock::now();
 					resetTimeOnPause_ = false;
 				}
 			}
@@ -77,7 +77,7 @@ public:
 	* \param The function that is called periodically
 	* \param If the thread starts running or is paused until resume() is called
 	*/
-	inline LoopingThread(std::chrono::system_clock::duration period, std::function<void()> routine, bool run = true) :
+	inline LoopingThread(std::chrono::steady_clock::duration period, std::function<void()> routine, bool run = true) :
 		period_(period),
 		routine_(routine),
 		waitLock_(waitMutex_, std::defer_lock),
@@ -135,7 +135,7 @@ public:
 	* \brief Changes the period
 	* \param The new calling period
 	*/
-	inline void setPeriod(std::chrono::system_clock::duration newPeriod)
+	inline void setPeriod(std::chrono::steady_clock::duration newPeriod)
 	{
 		period_ = newPeriod;
 	}

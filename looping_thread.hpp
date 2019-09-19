@@ -30,7 +30,6 @@ class LoopingThread {
 	
 	inline void work()
 	{
-		bool interrupted = false;
 		std::chrono::steady_clock::time_point awakenAt = std::chrono::steady_clock::now();
 		std::unique_lock<std::mutex> pauseLock(pauseMutex_);
 		while (true) {
@@ -44,7 +43,7 @@ class LoopingThread {
 						interrupted = true;
 				}
 				if (resetTimeOnPause_) {
-					awakenAt + period_ = std::chrono::steady_clock::now();
+					awakenAt = std::chrono::steady_clock::now() + period_;
 					resetTimeOnPause_ = false;
 				}
 			}

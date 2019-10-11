@@ -26,6 +26,7 @@ class LoopingThread {
 	bool exiting_ = false;
 	bool paused_;
 	bool resetTimeOnPause_ = true;
+	bool catchUp_ = true;
 	std::thread worker_;
 	
 	inline void work()
@@ -55,7 +56,10 @@ class LoopingThread {
 				pauseLock.lock();
 			} else {
 				routine_();
-				awakenAt += period_;
+				if (catchUp_)
+					awakenAt += period_;
+				else
+					awakenAt = std::chrono::steady_clock::now() + period_;
 			}
 		}
 	}
@@ -110,6 +114,7 @@ public:
 	inline void pause(bool resetTime = true)
 	{
 		if (routine_) {
+			if (paused_) throw(std::logic_error("Pausing a looping thread that is already paused"));
 			paused_ = true;
 			waitLock_.unlock();
 			resumeLock_.lock();
@@ -124,6 +129,7 @@ public:
 	inline void resume()
 	{
 		if (routine_) {
+			if (!paused_) throw(std::logic_error("Resuming a looping thread that is not paused"));
 			paused_ = false;
 			waitLock_.lock();
 			resumeLock_.unlock();
@@ -137,6 +143,19 @@ public:
 	inline void setPeriod(std::chrono::steady_clock::duration newPeriod)
 	{
 		period_ = newPeriod;
+	}
+
+
+	/*!
+	* \brief Enables or disables the catch up feature
+	* \param If it should be enabled
+	*
+	* \note Catch up enabled causes the program call the routine only the proper number of times, so if the thread is delayed, the routine
+	* will still be called as many times as expected over a long time
+	*/
+	inline void setCatchUp(bool catchUp)
+	{
+		catchUp_ = catchUp;
 	}
 };
 #endif // LOOPING_THREAD_H

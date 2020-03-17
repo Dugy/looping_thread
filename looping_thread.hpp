@@ -14,6 +14,7 @@
 #include <functional>
 #include <mutex>
 #include <chrono>
+#include <iostream>
  
 class LoopingThread {
 	std::chrono::steady_clock::duration period_;

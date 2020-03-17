@@ -55,7 +55,13 @@ class LoopingThread {
 				std::unique_lock<std::mutex> lock(resumeMutex_);
 				pauseLock.lock();
 			} else {
-				routine_();
+				try {
+					routine_();
+				} catch(std::exception& e) {
+					std::cout << e.what() << std::endl;
+				} catch(...) {
+					std::cout << "An unknown error has been thrown in a looping thread" << std::endl;
+				}
 				if (catchUp_)
 					awakenAt += period_;
 				else

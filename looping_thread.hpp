@@ -88,7 +88,7 @@ public:
 	* \param The function that is called periodically
 	* \param If the thread starts running or is paused until resume() is called
 	*/
-	inline LoopingThread(std::chrono::steady_clock::duration period, std::function<void()> routine, bool run = true, std::function<void(const std::exception&)> errorCallback = nullptr) :
+	inline LoopingThread(std::chrono::steady_clock::duration period, std::function<void()> routine, bool run = true) :
 		period_(period),
 		routine_(routine),
 		waitLock_(waitMutex_, std::defer_lock),
@@ -96,9 +96,8 @@ public:
 		paused_(true),
 		resetTimeOnPause_(false),
 		worker_(&LoopingThread::work, this),
-		errorCallback_(errorCallback)
+		errorCallback_([](const std::exception& e) { std::cout << e.what() << std::endl; })
 	{
-		if(!errorCallback_) errorCallback_ = [](const std::exception& e) { std::cout << e.what() << std::endl; };
 		if (run)
 			resume();
 	}
@@ -166,6 +165,15 @@ public:
 	inline void setCatchUp(bool catchUp)
 	{
 		catchUp_ = catchUp;
+	}
+
+	/*!
+	* \brief Changes error callback
+	* \param errorCallback function which is called when exception is thrown in routine
+	*/
+	inline void setErrorCallback(std::function<void(const std::exception&)> errorCallback)
+	{
+		errorCallback_ = errorCallback;
 	}
 };
 #endif // LOOPING_THREAD_H

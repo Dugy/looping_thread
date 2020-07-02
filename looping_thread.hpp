@@ -15,10 +15,11 @@
 #include <mutex>
 #include <chrono>
 #include <iostream>
- 
+
 class LoopingThread {
 	std::chrono::steady_clock::duration period_;
 	std::function<void()> routine_;
+	std::function<void(const std::exception&)> errorCallback_;
 	std::timed_mutex waitMutex_;
 	std::unique_lock<std::timed_mutex> waitLock_;
 	std::mutex pauseMutex_;
@@ -59,9 +60,9 @@ class LoopingThread {
 				try {
 					routine_();
 				} catch(std::exception& e) {
-					std::cout << e.what() << std::endl;
+					errorCallback_(e);
 				} catch(...) {
-					std::cout << "An unknown error has been thrown in a looping thread" << std::endl;
+					errorCallback_(std::runtime_error("An unknown error has been thrown in a looping thread"));
 				}
 				if (catchUp_)
 					awakenAt += period_;
@@ -94,7 +95,8 @@ public:
 		resumeLock_(resumeMutex_),
 		paused_(true),
 		resetTimeOnPause_(false),
-		worker_(&LoopingThread::work, this)
+		worker_(&LoopingThread::work, this),
+		errorCallback_([](const std::exception& e) { std::cout << e.what() << std::endl; })
 	{
 		if (run)
 			resume();
@@ -121,7 +123,7 @@ public:
 	inline void pause(bool resetTime = true)
 	{
 		if (routine_) {
-			if (paused_) throw(std::logic_error("Pausing a looping thread that is already paused"));
+			if (paused_) throw std::logic_error("Pausing a looping thread that is already paused");
 			paused_ = true;
 			waitLock_.unlock();
 			resumeLock_.lock();
@@ -136,7 +138,7 @@ public:
 	inline void resume()
 	{
 		if (routine_) {
-			if (!paused_) throw(std::logic_error("Resuming a looping thread that is not paused"));
+			if (!paused_) throw std::logic_error("Resuming a looping thread that is not paused");
 			paused_ = false;
 			waitLock_.lock();
 			resumeLock_.unlock();
@@ -163,6 +165,15 @@ public:
 	inline void setCatchUp(bool catchUp)
 	{
 		catchUp_ = catchUp;
+	}
+
+	/*!
+	* \brief Changes error callback
+	* \param errorCallback function which is called when exception is thrown in routine
+	*/
+	inline void setErrorCallback(std::function<void(const std::exception&)> errorCallback)
+	{
+		errorCallback_ = errorCallback;
 	}
 };
 #endif // LOOPING_THREAD_H

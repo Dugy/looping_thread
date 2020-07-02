@@ -15,10 +15,11 @@
 #include <mutex>
 #include <chrono>
 #include <iostream>
- 
+
 class LoopingThread {
 	std::chrono::steady_clock::duration period_;
 	std::function<void()> routine_;
+	std::function<void(const std::exception&)> errorCallback_;
 	std::timed_mutex waitMutex_;
 	std::unique_lock<std::timed_mutex> waitLock_;
 	std::mutex pauseMutex_;
@@ -59,9 +60,9 @@ class LoopingThread {
 				try {
 					routine_();
 				} catch(std::exception& e) {
-					std::cout << e.what() << std::endl;
+					errorCallback_(e);
 				} catch(...) {
-					std::cout << "An unknown error has been thrown in a looping thread" << std::endl;
+					errorCallback_(std::runtime_error("An unknown error has been thrown in a looping thread"));
 				}
 				if (catchUp_)
 					awakenAt += period_;
@@ -87,15 +88,17 @@ public:
 	* \param The function that is called periodically
 	* \param If the thread starts running or is paused until resume() is called
 	*/
-	inline LoopingThread(std::chrono::steady_clock::duration period, std::function<void()> routine, bool run = true) :
+	inline LoopingThread(std::chrono::steady_clock::duration period, std::function<void()> routine, bool run = true, std::function<void(const std::exception&)> errorCallback = nullptr) :
 		period_(period),
 		routine_(routine),
 		waitLock_(waitMutex_, std::defer_lock),
 		resumeLock_(resumeMutex_),
 		paused_(true),
 		resetTimeOnPause_(false),
-		worker_(&LoopingThread::work, this)
+		worker_(&LoopingThread::work, this),
+		errorCallback_(errorCallback)
 	{
+		if(!errorCallback_) errorCallback_ = [](const std::exception& e) { std::cout << e.what() << std::endl; };
 		if (run)
 			resume();
 	}
@@ -121,7 +124,7 @@ public:
 	inline void pause(bool resetTime = true)
 	{
 		if (routine_) {
-			if (paused_) throw(std::logic_error("Pausing a looping thread that is already paused"));
+			if (paused_) throw std::logic_error("Pausing a looping thread that is already paused");
 			paused_ = true;
 			waitLock_.unlock();
 			resumeLock_.lock();
@@ -136,7 +139,7 @@ public:
 	inline void resume()
 	{
 		if (routine_) {
-			if (!paused_) throw(std::logic_error("Resuming a looping thread that is not paused"));
+			if (!paused_) throw std::logic_error("Resuming a looping thread that is not paused");
 			paused_ = false;
 			waitLock_.lock();
 			resumeLock_.unlock();

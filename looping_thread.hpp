@@ -23,6 +23,7 @@ class LoopingThread {
 	std::timed_mutex waitMutex_;
 	std::unique_lock<std::timed_mutex> waitLock_;
 	std::mutex pauseMutex_;
+	std::unique_lock<std::mutex> pauseLock_;
 	std::mutex resumeMutex_;
 	std::unique_lock<std::mutex> resumeLock_;
 	bool exiting_ = false;
@@ -34,7 +35,6 @@ class LoopingThread {
 	inline void work()
 	{
 		std::chrono::steady_clock::time_point awakenAt = std::chrono::steady_clock::now();
-		std::unique_lock<std::mutex> pauseLock(pauseMutex_);
 		while (true) {
 			bool interrupted = false;
 			{
@@ -53,9 +53,9 @@ class LoopingThread {
 			
 			if (interrupted) {
 				if (exiting_) break;
-				pauseLock.unlock();
+				pauseLock_.unlock();
 				std::unique_lock<std::mutex> lock(resumeMutex_);
-				pauseLock.lock();
+				pauseLock_.lock();
 			} else {
 				try {
 					routine_();
@@ -92,6 +92,7 @@ public:
 		period_(period),
 		routine_(routine),
 		waitLock_(waitMutex_, std::defer_lock),
+		pauseLock_(pauseMutex_),
 		resumeLock_(resumeMutex_),
 		paused_(true),
 		resetTimeOnPause_(false),
@@ -114,6 +115,7 @@ public:
 			else
 				waitLock_.unlock();
 			worker_.join();
+			pauseLock_.unlock();
 		}
 	}
 	
